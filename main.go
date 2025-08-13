@@ -83,10 +83,11 @@ func main() {
 				continue
 			}
 			fmt.Printf("\n\nChapter %d | Part %d\n", k, i)
-			fmt.Print(p)
+
 			lastchapt = k
 			lastpart = i
 			for _, part := range splitlen(p, 4096) {
+				fmt.Print(part)
 				if err := spk.Speak(ctx, part); err != nil {
 					log.Printf("Failed to read book: %v\n", err)
 					return
