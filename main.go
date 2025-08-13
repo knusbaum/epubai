@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"fmt"
@@ -54,6 +55,9 @@ func main() {
 		lastchapt int
 		lastpart  int
 	)
+
+	ip := inputter(ctx)
+
 	for k, item := range book.Spine.Itemrefs {
 		if ctx.Err() != nil {
 
@@ -86,13 +90,24 @@ func main() {
 
 			lastchapt = k
 			lastpart = i
-			for _, part := range splitlen(p, 4096) {
-				fmt.Print(part)
-				if err := spk.Speak(ctx, part); err != nil {
-					log.Printf("Failed to read book: %v\n", err)
-					return
-				}
-			}
+			speakPart(ctx, ip, &spk, p)
+		}
+	}
+}
+
+func speakPart(ctx context.Context, ip <-chan struct{}, spk *Speaker, p string) {
+	ctx2, cancel2 := context.WithCancel(ctx)
+	defer cancel2()
+	handle_input(ctx2, ip, cancel2)
+	for _, part := range splitlen(p, 4096) {
+		fmt.Print(part)
+		if ctx2.Err() != nil {
+			// we still want to print all the segments
+			continue
+		}
+		if err := spk.Speak(ctx2, part); err != nil {
+			log.Printf("Failed to read book: %v\n", err)
+			return
 		}
 	}
 }
@@ -114,6 +129,38 @@ func splitlen(str string, max_chars int) []string {
 	}
 	out = append(out, part)
 	return out
+}
+
+func inputter(ctx context.Context) <-chan struct{} {
+	c := make(chan struct{}, 0)
+	go func() {
+		defer close(c)
+		b := bufio.NewReader(os.Stdin)
+		for {
+			_, err := b.ReadString('\n')
+			if err != nil {
+				fmt.Printf("Failed to read input: %v\n", err)
+			}
+			select {
+			case c <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return c
+}
+
+func handle_input(ctx context.Context, inputter <-chan struct{}, onDisruption func()) {
+	go func() {
+		select {
+		case <-inputter:
+			fmt.Printf("\nUser input\n")
+			onDisruption()
+		case <-ctx.Done():
+			return
+		}
+	}()
 }
 
 func handle_interrupt(ctx context.Context, onDisruption func()) {
