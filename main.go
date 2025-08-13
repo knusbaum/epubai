@@ -86,12 +86,33 @@ func main() {
 			fmt.Print(p)
 			lastchapt = k
 			lastpart = i
-			if err := spk.Speak(ctx, p); err != nil {
-				log.Printf("Failed to read book: %v\n", err)
-				return
+			for _, part := range splitlen(p, 4096) {
+				if err := spk.Speak(ctx, part); err != nil {
+					log.Printf("Failed to read book: %v\n", err)
+					return
+				}
 			}
 		}
 	}
+}
+
+func splitlen(str string, max_chars int) []string {
+	if len(str) < max_chars {
+		return []string{str}
+	}
+	// Attempt to split on sentences
+	parts := strings.Split(str, ". ")
+	var out []string
+	var part = parts[0] + ". "
+	for _, p := range parts[1:] {
+		if len(part+p) > max_chars {
+			out = append(out, part)
+			part = ""
+		}
+		part += p + ". "
+	}
+	out = append(out, part)
+	return out
 }
 
 func handle_interrupt(ctx context.Context, onDisruption func()) {
